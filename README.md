@@ -115,35 +115,15 @@ docker compose exec simulator python devices.py --send dark_motion
 Потрібно: Docker + Docker Compose v2, `openssl`, bash (Linux / macOS / WSL / Git Bash).
 
 ```bash
-git clone <URL_РЕПОЗИТОРІЮ> && cd iot-mc1-kuchkovyi
-./scripts/make-env.sh        # створює .env з випадковими паролями (1/2)
-./certs/generate.sh          # власний CA + серверний сертифікат      (2/2)
-docker compose up -d         # вся система
+./scripts/make-env.sh        
+./certs/generate.sh          
+docker compose up -d         
 ```
 
-Перший старт openHAB триває 3–5 хв (завантажує аддони mqtt, jsonpath, rrd4j, basic UI — потрібен Інтернет). Слідкувати: `docker compose logs -f openhab`.
-
-1. Відкрити <http://localhost:8080>, створити адміністратора openHAB (перший запуск).
+1. Відкрити <http://localhost:8080>, створити адміністратора openHAB.
 2. Інтерфейс: <http://localhost:8080/basicui/app?sitemap=flat>
 3. Перевірити Things: Settings → Things — усі `mqtt:topic:mosquitto:*` у стані ONLINE.
 4. Для демо увімкнути в Sitemap «Демо-прискорення таймерів».
-
-Корисні команди:
-
-```bash
-docker compose ps
-docker compose logs -f simulator
-# прослуховування всіх топіків (під адміністратором)
-set -a; . ./.env; set +a
-docker compose exec mosquitto mosquitto_sub -h localhost -p 8883 --cafile /mosquitto/certs/ca.crt \
-    -u admin -P "$MQTT_PASS_ADMIN" -t 'flat/#' -v
-# аварійне «падіння» симулятора → Last Will
-docker compose kill simulator      # через ~15 с пристрої стануть offline; docker compose up -d simulator
-# перевірка безпеки
-./scripts/security-demo.sh
-```
-
-Зупинка з видаленням даних: `docker compose down -v`.
 
 ## 8. Безпека
 
@@ -157,8 +137,6 @@ docker compose kill simulator      # через ~15 с пристрої стан
 | Жодних секретів у git | паролі в `.env` (у git лише `.env.example`), ключі генерує скрипт, `.gitignore`; `broker.things` з паролем openHAB генерується з шаблону при старті |
 | DoS-обмеження | `max_connections`, `message_size_limit`, `max_queued_messages`, `max_inflight_messages` |
 
-**Автентифікація ≠ авторизація.** Пароль відповідає на питання «хто ти» (брокер перевіряє логін/пароль). ACL відповідає на питання «що тобі можна» (з якими топіками). Навіть із вкраденим паролем сенсора зловмисник зможе лише публікувати у топік цього сенсора — команду обігрівачу він надіслати не зможе.
-
 ### Модель загроз STRIDE
 
 | Категорія | Загроза | Захід протидії |
@@ -169,11 +147,6 @@ docker compose kill simulator      # через ~15 с пристрої стан
 | **I** Information disclosure | Підслуховування телеметрії руху розкриває, коли нікого немає вдома; витік паролів | TLS 8883; ACL обмежує читання; паролі у `.env`, не в git; порт 1883 закритий |
 | **D** Denial of service | Масове підключення/потік повідомлень глушить брокер; зникнення сенсора лишається непоміченим | Ліміти з'єднань, розміру й черг у `mosquitto.conf`; `restart: unless-stopped`; Last Will + `availabilityTopic` швидко показують зникнення пристрою |
 | **E** Elevation of privilege | Скомпрометований сенсор намагається керувати актуаторами або підписатися на чужі топіки | ACL за принципом найменших привілеїв; адмін-користувач окремий і не використовується пристроями; контейнери без privileged, назовні тільки 8883 і 8080 (на localhost) |
-
-## 9. Скріншоти
-
-Додати 3–5 знімків у `docs/screenshots/`:
-`sitemap.png` (датчики + керування), `chart-power.png` (графік потужності), `alarm.png` (тривога перевантаження), `mqtt-explorer.png` (потік топіків), `broker-denied.png` (відмови брокера в логах).
 
 ## 10. Структура репозиторію
 
@@ -187,13 +160,3 @@ docker compose kill simulator      # через ~15 с пристрої стан
 ├── simulator/        devices.py, Dockerfile, requirements.txt
 └── docs/screenshots/
 ```
-
-## 11. Можливі проблеми
-
-| Симптом | Що перевірити |
-|---|---|
-| openHAB довго «Starting» | перший запуск + завантаження аддонів; `docker compose logs -f openhab` |
-| Bridge OFFLINE, помилка TLS | чи виконано `./certs/generate.sh` **до** `docker compose up`; перегенерували сертифікати → `docker compose up -d --force-recreate init openhab` |
-| Bridge OFFLINE, «not authorised» | `.env` змінювали після першого запуску → `docker compose up -d --force-recreate init mosquitto openhab simulator` |
-| `docker compose up` скаржиться на тег openHAB | у `.env` задати `OPENHAB_TAG=4.3.0` (або іншу наявну 4.x версію) |
-| Things UNINITIALIZED з помилкою параметра | порівняйте назви параметрів каналів із документацією MQTT binding вашої версії openHAB |
