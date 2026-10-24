@@ -1,0 +1,10 @@
+# секрети та згенеровані файли — НЕ комітити
+.env
+certs/*.key
+certs/*.crt
+certs/*.csr
+certs/*.srl
+certs/*.ext
+openhab/conf/things/broker.things
+__pycache__/
+*.pyc

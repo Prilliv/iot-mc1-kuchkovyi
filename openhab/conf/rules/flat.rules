@@ -1,0 +1,156 @@
+import java.time.format.DateTimeFormatter
+
+// Прискорення для демонстрації (перемикач Demo_Fast у UI):
+//   вимкнути світло без руху:  5 хв  -> 30 с
+//   «нікого вдома»:           30 хв -> 60 с
+//   перевантаження > 2500 Вт:  1 хв  -> 15 с
+val DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm:ss")
+
+var Timer tLivingOff = null
+var Timer tBedroomOff = null
+var Timer tAway = null
+var Timer tOverload = null
+
+rule "Старт: значення за замовчуванням"
+when
+    System started
+then
+    if (Flat_Mode.state == NULL || Flat_Mode.state == UNDEF) Flat_Mode.postUpdate("COMFORT")
+    if (Demo_Fast.state == NULL || Demo_Fast.state == UNDEF) Demo_Fast.postUpdate(OFF)
+    if (Alarm_Overload.state == NULL || Alarm_Overload.state == UNDEF) Alarm_Overload.postUpdate(OFF)
+    if (Alert_Text.state == NULL || Alert_Text.state == UNDEF) Alert_Text.postUpdate("Все гаразд")
+    if (Last_Event.state == NULL || Last_Event.state == UNDEF) Last_Event.postUpdate("—")
+end
+
+// ============================================================================
+// ПРАВИЛО 1а: рух + освітленість < 50 лк -> світло 70 %
+// ============================================================================
+rule "R1a: рух і темно -> світло 70%"
+when
+    Item Motion_Living changed to ON or
+    Item Motion_Bedroom changed to ON or
+    Item Lux_Hall received update
+then
+    if (!(Lux_Hall.state instanceof Number)) return;
+    val lux = (Lux_Hall.state as Number).doubleValue
+    if (lux >= 50) return;
+
+    if (Motion_Living.state == ON && Light_Living_Power.state != ON) {
+        Light_Living_Level.sendCommand(70)
+        Last_Event.postUpdate(now.format(fmt) + " R1: темно (" + lux.intValue + " лк) + рух у вітальні -> світло 70%")
+    }
+    if (Motion_Bedroom.state == ON && Light_Bedroom_Power.state != ON) {
+        Light_Bedroom_Level.sendCommand(70)
+        Last_Event.postUpdate(now.format(fmt) + " R1: темно (" + lux.intValue + " лк) + рух у спальні -> світло 70%")
+    }
+end
+
+// ============================================================================
+// ПРАВИЛО 1б: немає руху 5 хв -> вимкнути світло (окремий таймер для кожної кімнати)
+// ============================================================================
+rule "R1b: вітальня без руху -> вимкнути"
+when
+    Item Motion_Living changed or
+    Item Light_Living_Power changed to ON
+then
+    if (tLivingOff !== null) {
+        tLivingOff.cancel()
+        tLivingOff = null
+    }
+    if (Motion_Living.state == ON) return;
+    val int sec = if (Demo_Fast.state == ON) 30 else 300
+    tLivingOff = createTimer(now.plusSeconds(sec), [|
+        if (Motion_Living.state != ON && Light_Living_Power.state == ON) {
+            Light_Living_Power.sendCommand(OFF)
+            Last_Event.postUpdate(now.format(fmt) + " R1: вітальня без руху " + sec + " с -> світло вимкнено")
+        }
+        tLivingOff = null
+    ])
+end
+
+rule "R1b: спальня без руху -> вимкнути"
+when
+    Item Motion_Bedroom changed or
+    Item Light_Bedroom_Power changed to ON
+then
+    if (tBedroomOff !== null) {
+        tBedroomOff.cancel()
+        tBedroomOff = null
+    }
+    if (Motion_Bedroom.state == ON) return;
+    val int sec = if (Demo_Fast.state == ON) 30 else 300
+    tBedroomOff = createTimer(now.plusSeconds(sec), [|
+        if (Motion_Bedroom.state != ON && Light_Bedroom_Power.state == ON) {
+            Light_Bedroom_Power.sendCommand(OFF)
+            Last_Event.postUpdate(now.format(fmt) + " R1: спальня без руху " + sec + " с -> світло вимкнено")
+        }
+        tBedroomOff = null
+    ])
+end
+
+// ============================================================================
+// ПРАВИЛО 2: нікого вдома 30 хв -> «Економ», уставка 17 °C; рух -> 21 °C
+// ============================================================================
+rule "R2: присутність -> режим Економ/Комфорт"
+when
+    Item gMotion changed
+then
+    if (tAway !== null) {
+        tAway.cancel()
+        tAway = null
+    }
+    if (gMotion.state == ON) {
+        if (Flat_Mode.state.toString == "ECO") {
+            Flat_Mode.postUpdate("COMFORT")
+            Heater_Setpoint.sendCommand(21)
+            Last_Event.postUpdate(now.format(fmt) + " R2: рух виявлено -> режим Комфорт, уставка 21 °C")
+        }
+        return
+    }
+    if (gMotion.state == OFF) {
+        val int sec = if (Demo_Fast.state == ON) 60 else 1800
+        tAway = createTimer(now.plusSeconds(sec), [|
+            if (gMotion.state == OFF) {
+                Flat_Mode.postUpdate("ECO")
+                Heater_Setpoint.sendCommand(17)
+                Last_Event.postUpdate(now.format(fmt) + " R2: нікого вдома " + sec + " с -> режим Економ, уставка 17 °C")
+            }
+            tAway = null
+        ])
+    }
+end
+
+// ============================================================================
+// ПРАВИЛО 3: потужність > 2500 Вт понад 1 хв -> тривога в UI + вимкнути обігрівач
+// ============================================================================
+rule "R3: перевантаження мережі"
+when
+    Item Power_W received update
+then
+    if (!(Power_W.state instanceof Number)) return;
+    val p = (Power_W.state as Number).doubleValue
+
+    if (p > 2500) {
+        if (tOverload === null && Alarm_Overload.state != ON) {
+            val int sec = if (Demo_Fast.state == ON) 15 else 60
+            tOverload = createTimer(now.plusSeconds(sec), [|
+                Alarm_Overload.sendCommand(ON)
+                Alert_Text.postUpdate("ПЕРЕВАНТАЖЕННЯ: > 2500 Вт понад " + sec + " с. Обігрівач вимкнено")
+                Heater_Power.sendCommand(OFF)
+                Last_Event.postUpdate(now.format(fmt) + " R3: перевантаження -> тривога, обігрівач вимкнено")
+                tOverload = null
+            ])
+        }
+    } else if (tOverload !== null) {
+        tOverload.cancel()
+        tOverload = null
+    }
+end
+
+rule "R3: підтвердження тривоги"
+when
+    Item Alarm_Overload changed to OFF
+then
+    Alert_Text.postUpdate("Все гаразд")
+    Last_Event.postUpdate(now.format(fmt) + " Тривогу підтверджено користувачем")
+end

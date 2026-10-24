@@ -1,0 +1,90 @@
+name: iot-mc1
+
+services:
+  # Одноразове завдання: рендер broker.things (пароль з .env) + truststore з нашим CA для openHAB
+  init:
+    image: eclipse-temurin:17-jre
+    restart: "no"
+    entrypoint: ["/bin/sh", "/init-openhab.sh"]
+    environment:
+      OPENHAB_MQTT_PASS: ${MQTT_PASS_OPENHAB}
+      HOST_UID: ${HOST_UID:-1000}
+      HOST_GID: ${HOST_GID:-1000}
+    volumes:
+      - ./scripts/init-openhab.sh:/init-openhab.sh:ro
+      - ./openhab/templates:/templates:ro
+      - ./openhab/conf/things:/out-things
+      - ./certs/ca.crt:/ca.crt:ro
+      - truststore:/ts
+
+  # Мережевий рівень: MQTT-брокер, лише TLS 8883, автентифікація + ACL
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/init.sh"]
+    command: ["/usr/sbin/mosquitto", "-c", "/mosquitto/config/mosquitto.conf"]
+    env_file: .env            # лише брокеру потрібні всі паролі (щоб зробити хеші)
+    ports:
+      - "${BROKER_BIND:-127.0.0.1}:8883:8883"
+    volumes:
+      - ./mosquitto/init.sh:/init.sh:ro
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./certs/ca.crt:/mosquitto/certs/ca.crt:ro
+      - ./certs/server.crt:/mosquitto/certs/server.crt:ro
+      - ./certs/server.key:/mosquitto/certs/server.key:ro
+      - mosquitto-data:/mosquitto/data
+
+  # Рівень сприйняття: Python-симулятори сенсорів і актуаторів (кожен — окремий MQTT-клієнт)
+  simulator:
+    build: ./simulator
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    command: ["python", "devices.py", "--scenario", "normal"]
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "8883"
+      MQTT_CA: /certs/ca.crt
+      MQTT_PASS_MOTION_LIVING: ${MQTT_PASS_MOTION_LIVING}
+      MQTT_PASS_MOTION_BEDROOM: ${MQTT_PASS_MOTION_BEDROOM}
+      MQTT_PASS_TEMP_LIVING: ${MQTT_PASS_TEMP_LIVING}
+      MQTT_PASS_HUM_LIVING: ${MQTT_PASS_HUM_LIVING}
+      MQTT_PASS_LUX_HALL: ${MQTT_PASS_LUX_HALL}
+      MQTT_PASS_POWER_HALL: ${MQTT_PASS_POWER_HALL}
+      MQTT_PASS_LIGHT_LIVING: ${MQTT_PASS_LIGHT_LIVING}
+      MQTT_PASS_LIGHT_BEDROOM: ${MQTT_PASS_LIGHT_BEDROOM}
+      MQTT_PASS_HEATER_LIVING: ${MQTT_PASS_HEATER_LIVING}
+      MQTT_PASS_SIM_CTL: ${MQTT_PASS_SIM_CTL}
+      MQTT_PASS_SIM_TRIGGER: ${MQTT_PASS_SIM_TRIGGER}
+    volumes:
+      - ./simulator:/app:ro
+      - ./certs/ca.crt:/certs/ca.crt:ro
+
+  # Рівень обробки + застосунків: openHAB (Things/Items/Rules, Basic UI, графік)
+  openhab:
+    image: openhab/openhab:${OPENHAB_TAG:-4.3.0}
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      mosquitto:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      USER_ID: ${HOST_UID:-1000}
+      GROUP_ID: ${HOST_GID:-1000}
+      OPENHAB_HTTP_PORT: "8080"
+      CRYPTO_POLICY: unlimited
+      EXTRA_JAVA_OPTS: "-Djavax.net.ssl.trustStore=/ts/truststore.p12 -Djavax.net.ssl.trustStorePassword=changeit"
+    volumes:
+      - ./openhab/conf:/openhab/conf
+      - openhab-userdata:/openhab/userdata
+      - openhab-addons:/openhab/addons
+      - truststore:/ts:ro
+
+volumes:
+  truststore:
+  mosquitto-data:
+  openhab-userdata:
+  openhab-addons:

@@ -1,0 +1,66 @@
+# ACL за принципом найменших привілеїв.
+# Топіки: flat/<зона>/<пристрій>/{telemetry|set|state|status}
+
+# ---------- адміністратор ----------
+user admin
+topic readwrite #
+topic read $SYS/#
+
+# ---------- openHAB ----------
+# читає все, що публікують пристрої; пише ЛИШЕ команди трьом актуаторам
+user openhab
+topic read flat/+/+/telemetry
+topic read flat/+/+/state
+topic read flat/+/+/status
+topic write flat/living/light/set
+topic write flat/bedroom/light/set
+topic write flat/living/heater/set
+
+# ---------- СЕНСОРИ: публікують тільки свою телеметрію і статус ----------
+user motion_living
+topic write flat/living/motion/telemetry
+topic write flat/living/motion/status
+
+user motion_bedroom
+topic write flat/bedroom/motion/telemetry
+topic write flat/bedroom/motion/status
+
+user temp_living
+topic write flat/living/temperature/telemetry
+topic write flat/living/temperature/status
+
+user hum_living
+topic write flat/living/humidity/telemetry
+topic write flat/living/humidity/status
+
+user lux_hall
+topic write flat/hall/lux/telemetry
+topic write flat/hall/lux/status
+
+user power_hall
+topic write flat/hall/power/telemetry
+topic write flat/hall/power/status
+
+# ---------- АКТУАТОРИ: читають лише свій /set, пишуть свій /state і /status ----------
+user light_living
+topic read  flat/living/light/set
+topic write flat/living/light/state
+topic write flat/living/light/status
+
+user light_bedroom
+topic read  flat/bedroom/light/set
+topic write flat/bedroom/light/state
+topic write flat/bedroom/light/status
+
+user heater_living
+topic read  flat/living/heater/set
+topic write flat/living/heater/state
+topic write flat/living/heater/status
+
+# ---------- допоміжне: керування сценаріями симулятора ----------
+user sim_ctl
+topic read  flat/sim/scenario/set
+topic write flat/sim/controller/status
+
+user sim_trigger
+topic write flat/sim/scenario/set

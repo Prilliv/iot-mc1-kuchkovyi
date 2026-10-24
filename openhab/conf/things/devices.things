@@ -1,0 +1,87 @@
+// Things Generic MQTT. Брокер (Bridge mqtt:broker:mosquitto) генерується у broker.things.
+// Топіки: flat/<зона>/<пристрій>/{telemetry|set|state|status}
+// Telemetry: {"value": 23.4, "unit": "C", "ts": 1761300000}  -> JSONPATH:$.value
+
+// ---------------- СЕНСОРИ ----------------
+Thing mqtt:topic:mosquitto:motion_living (mqtt:broker:mosquitto) "Датчик руху (вітальня)" [
+    availabilityTopic="flat/living/motion/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type switch : motion "Рух" [ stateTopic="flat/living/motion/telemetry", stateTransformation="JSONPATH:$.value", on="1", off="0" ]
+        Type string : status "Статус" [ stateTopic="flat/living/motion/status" ]
+}
+
+Thing mqtt:topic:mosquitto:motion_bedroom (mqtt:broker:mosquitto) "Датчик руху (спальня)" [
+    availabilityTopic="flat/bedroom/motion/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type switch : motion "Рух" [ stateTopic="flat/bedroom/motion/telemetry", stateTransformation="JSONPATH:$.value", on="1", off="0" ]
+        Type string : status "Статус" [ stateTopic="flat/bedroom/motion/status" ]
+}
+
+Thing mqtt:topic:mosquitto:temp_living (mqtt:broker:mosquitto) "Температура (вітальня)" [
+    availabilityTopic="flat/living/temperature/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type number : value "Температура" [ stateTopic="flat/living/temperature/telemetry", stateTransformation="JSONPATH:$.value" ]
+        Type string : status "Статус" [ stateTopic="flat/living/temperature/status" ]
+}
+
+Thing mqtt:topic:mosquitto:hum_living (mqtt:broker:mosquitto) "Вологість (вітальня)" [
+    availabilityTopic="flat/living/humidity/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type number : value "Вологість" [ stateTopic="flat/living/humidity/telemetry", stateTransformation="JSONPATH:$.value" ]
+        Type string : status "Статус" [ stateTopic="flat/living/humidity/status" ]
+}
+
+Thing mqtt:topic:mosquitto:lux_hall (mqtt:broker:mosquitto) "Освітленість (коридор)" [
+    availabilityTopic="flat/hall/lux/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type number : value "Освітленість" [ stateTopic="flat/hall/lux/telemetry", stateTransformation="JSONPATH:$.value" ]
+        Type string : status "Статус" [ stateTopic="flat/hall/lux/status" ]
+}
+
+Thing mqtt:topic:mosquitto:power_hall (mqtt:broker:mosquitto) "Лічильник потужності" [
+    availabilityTopic="flat/hall/power/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type number : value "Потужність, Вт" [ stateTopic="flat/hall/power/telemetry", stateTransformation="JSONPATH:$.value" ]
+        Type string : status "Статус" [ stateTopic="flat/hall/power/status" ]
+}
+
+// ---------------- АКТУАТОРИ ----------------
+// set: {"state":"ON"} або {"brightness":70};  state: {"state":"ON","brightness":70}
+Thing mqtt:topic:mosquitto:light_living (mqtt:broker:mosquitto) "Світло (вітальня)" [
+    availabilityTopic="flat/living/light/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type switch : power "Живлення" [ stateTopic="flat/living/light/state", commandTopic="flat/living/light/set",
+            stateTransformation="JSONPATH:$.state", formatBeforePublish="{\"state\":\"%s\"}", on="ON", off="OFF" ]
+        Type number : level "Яскравість" [ stateTopic="flat/living/light/state", commandTopic="flat/living/light/set",
+            stateTransformation="JSONPATH:$.brightness", formatBeforePublish="{\"brightness\":%s}", min=0, max=100 ]
+        Type string : status "Статус" [ stateTopic="flat/living/light/status" ]
+}
+
+Thing mqtt:topic:mosquitto:light_bedroom (mqtt:broker:mosquitto) "Світло (спальня)" [
+    availabilityTopic="flat/bedroom/light/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type switch : power "Живлення" [ stateTopic="flat/bedroom/light/state", commandTopic="flat/bedroom/light/set",
+            stateTransformation="JSONPATH:$.state", formatBeforePublish="{\"state\":\"%s\"}", on="ON", off="OFF" ]
+        Type number : level "Яскравість" [ stateTopic="flat/bedroom/light/state", commandTopic="flat/bedroom/light/set",
+            stateTransformation="JSONPATH:$.brightness", formatBeforePublish="{\"brightness\":%s}", min=0, max=100 ]
+        Type string : status "Статус" [ stateTopic="flat/bedroom/light/status" ]
+}
+
+Thing mqtt:topic:mosquitto:heater_living (mqtt:broker:mosquitto) "Обігрівач" [
+    availabilityTopic="flat/living/heater/status", payloadAvailable="online", payloadNotAvailable="offline" ]
+{
+    Channels:
+        Type switch : power "ON/OFF" [ stateTopic="flat/living/heater/state", commandTopic="flat/living/heater/set",
+            stateTransformation="JSONPATH:$.state", formatBeforePublish="{\"state\":\"%s\"}", on="ON", off="OFF" ]
+        Type number : setpoint "Уставка, °C" [ stateTopic="flat/living/heater/state", commandTopic="flat/living/heater/set",
+            stateTransformation="JSONPATH:$.setpoint", formatBeforePublish="{\"setpoint\":%s}", min=10, max=28, step=0.5 ]
+        Type string : status "Статус" [ stateTopic="flat/living/heater/status" ]
+}

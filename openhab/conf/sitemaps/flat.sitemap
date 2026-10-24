@@ -1,0 +1,48 @@
+sitemap flat label="Енергоощадна розумна квартира" {
+
+    Frame label="Тривоги та сповіщення" {
+        Text   item=Alert_Text   icon="alarm" valuecolor=[Alarm_Overload==ON="red"]
+        Switch item=Alarm_Overload label="Тривога перевантаження (вимкнути = підтвердити)" icon="alarm" labelcolor=[Alarm_Overload==ON="red"]
+        Text   item=Last_Event
+    }
+
+    Frame label="Сенсори" {
+        Text item=Temp_Living
+        Text item=Hum_Living
+        Text item=Lux_Hall
+        Text item=Power_W valuecolor=[Power_W>2500="red", Power_W>2000="orange"]
+        Text item=Motion_Living
+        Text item=Motion_Bedroom
+    }
+
+    Frame label="Керування" {
+        Switch item=Light_Living_Power
+        Slider item=Light_Living_Level  minValue=0 maxValue=100 step=5
+        Switch item=Light_Bedroom_Power
+        Slider item=Light_Bedroom_Level minValue=0 maxValue=100 step=5
+        Switch item=Heater_Power
+        Setpoint item=Heater_Setpoint minValue=10 maxValue=28 step=0.5
+        Text item=Flat_Mode
+        Switch item=Demo_Fast
+    }
+
+    Frame label="Споживання потужності за останню годину" {
+        Chart item=Power_W service="rrd4j" period=h refresh=30000
+    }
+
+    Frame label="Температура за останню годину" {
+        Chart item=Temp_Living service="rrd4j" period=h refresh=30000
+    }
+
+    Frame label="Статус пристроїв (online / offline)" {
+        Text item=Status_Motion_Living  valuecolor=[Status_Motion_Living=="offline"="red", "online"="green"]
+        Text item=Status_Motion_Bedroom valuecolor=[Status_Motion_Bedroom=="offline"="red", "online"="green"]
+        Text item=Status_Temp           valuecolor=[Status_Temp=="offline"="red", "online"="green"]
+        Text item=Status_Hum            valuecolor=[Status_Hum=="offline"="red", "online"="green"]
+        Text item=Status_Lux            valuecolor=[Status_Lux=="offline"="red", "online"="green"]
+        Text item=Status_Power          valuecolor=[Status_Power=="offline"="red", "online"="green"]
+        Text item=Status_Light_Living   valuecolor=[Status_Light_Living=="offline"="red", "online"="green"]
+        Text item=Status_Light_Bedroom  valuecolor=[Status_Light_Bedroom=="offline"="red", "online"="green"]
+        Text item=Status_Heater         valuecolor=[Status_Heater=="offline"="red", "online"="green"]
+    }
+}

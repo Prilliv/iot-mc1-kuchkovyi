@@ -1,0 +1,9 @@
+Strategies {
+    everyMinute : "0 * * * * ?"
+    default = everyChange
+}
+
+Items {
+    // графіки: потужність (остання година), температура, вологість, освітленість
+    Power_W, Temp_Living, Hum_Living, Lux_Hall : strategy = everyChange, everyMinute
+}
